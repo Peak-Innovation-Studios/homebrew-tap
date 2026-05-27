@@ -1,0 +1,90 @@
+name: Bump gpg-manager Cask
+
+on:
+  schedule:
+    # Hourly. GPGManager releases are infrequent and this is a public repo
+    # so Actions minutes are unmetered.
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to bump to (e.g. 1.0.1). Leave blank to auto-detect the latest GPGManager release."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine target version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            v="${{ github.event.inputs.version }}"
+          else
+            v=$(curl -sf https://api.github.com/repos/Peak-Innovation-Studios/GPGManager/releases/latest | jq -r .tag_name)
+            v="${v#v}"
+          fi
+          if [ -z "$v" ] || [ "$v" = "null" ]; then
+            echo "Could not determine target version." >&2
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Target version: $v"
+
+      - name: Read current Cask version
+        id: cur
+        run: |
+          set -euo pipefail
+          c=$(grep -E '^\s*version "' Casks/gpg-manager.rb | sed -E 's/.*"(.*)".*/\1/')
+          echo "current=$c" >> "$GITHUB_OUTPUT"
+          echo "Current Cask version: $c"
+
+      - name: Compute new sha256
+        if: steps.ver.outputs.version != steps.cur.outputs.current
+        id: sha
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          url="https://github.com/Peak-Innovation-Studios/GPGManager/releases/download/v${v}/GPGManager-${v}.zip"
+          tmp=$(mktemp)
+          curl -sfL "$url" -o "$tmp"
+          sha=$(shasum -a 256 "$tmp" | cut -d' ' -f1)
+          rm -f "$tmp"
+          if [ -z "$sha" ]; then
+            echo "Failed to fetch + hash $url" >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "New sha256: $sha"
+
+      - name: Update Cask
+        if: steps.ver.outputs.version != steps.cur.outputs.current
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          sha="${{ steps.sha.outputs.sha }}"
+          sed -i "s/^\(\s*version \).*/\1\"$v\"/" Casks/gpg-manager.rb
+          sed -i "s/^\(\s*sha256 \).*/\1\"$sha\"/" Casks/gpg-manager.rb
+          git --no-pager diff Casks/gpg-manager.rb
+
+      - name: Commit + push
+        if: steps.ver.outputs.version != steps.cur.outputs.current
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/gpg-manager.rb
+          git commit -m "gpg-manager: bump to $v"
+          git push
+
+      - name: Up to date
+        if: steps.ver.outputs.version == steps.cur.outputs.current
+        run: echo "Cask already at version ${{ steps.cur.outputs.current }} — nothing to do."
