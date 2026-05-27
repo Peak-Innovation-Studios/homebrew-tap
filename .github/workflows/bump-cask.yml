@@ -38,16 +38,17 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Target version: $v"
 
-      - name: Read current Cask version
+      - name: Read current Cask version + sha256
         id: cur
         run: |
           set -euo pipefail
-          c=$(grep -E '^\s*version "' Casks/gpg-manager.rb | sed -E 's/.*"(.*)".*/\1/')
-          echo "current=$c" >> "$GITHUB_OUTPUT"
-          echo "Current Cask version: $c"
+          v=$(grep -E '^\s*version "' Casks/gpg-manager.rb | sed -E 's/.*"(.*)".*/\1/')
+          s=$(grep -E '^\s*sha256 "' Casks/gpg-manager.rb | sed -E 's/.*"(.*)".*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "sha=$s" >> "$GITHUB_OUTPUT"
+          echo "Current Cask: $v ($s)"
 
-      - name: Compute new sha256
-        if: steps.ver.outputs.version != steps.cur.outputs.current
+      - name: Compute target sha256
         id: sha
         run: |
           set -euo pipefail
@@ -62,10 +63,31 @@ jobs:
             exit 1
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "New sha256: $sha"
+          echo "Target sha256: $sha"
+
+      - name: Decide whether to bump
+        id: decide
+        run: |
+          set -euo pipefail
+          tv="${{ steps.ver.outputs.version }}"
+          ts="${{ steps.sha.outputs.sha }}"
+          cv="${{ steps.cur.outputs.version }}"
+          cs="${{ steps.cur.outputs.sha }}"
+          if [ "$tv" != "$cv" ] || [ "$ts" != "$cs" ]; then
+            echo "should-bump=true" >> "$GITHUB_OUTPUT"
+            if [ "$tv" != "$cv" ]; then
+              echo "Version change: $cv -> $tv"
+            fi
+            if [ "$ts" != "$cs" ]; then
+              echo "sha256 change: $cs -> $ts"
+            fi
+          else
+            echo "should-bump=false" >> "$GITHUB_OUTPUT"
+            echo "Cask already at $cv ($cs) — nothing to do."
+          fi
 
       - name: Update Cask
-        if: steps.ver.outputs.version != steps.cur.outputs.current
+        if: steps.decide.outputs.should-bump == 'true'
         run: |
           set -euo pipefail
           v="${{ steps.ver.outputs.version }}"
@@ -75,16 +97,19 @@ jobs:
           git --no-pager diff Casks/gpg-manager.rb
 
       - name: Commit + push
-        if: steps.ver.outputs.version != steps.cur.outputs.current
+        if: steps.decide.outputs.should-bump == 'true'
         run: |
           set -euo pipefail
           v="${{ steps.ver.outputs.version }}"
+          tv="${{ steps.ver.outputs.version }}"
+          cv="${{ steps.cur.outputs.version }}"
+          if [ "$tv" != "$cv" ]; then
+            msg="gpg-manager: bump to $v"
+          else
+            msg="gpg-manager: refresh sha256 for $v"
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Casks/gpg-manager.rb
-          git commit -m "gpg-manager: bump to $v"
+          git commit -m "$msg"
           git push
-
-      - name: Up to date
-        if: steps.ver.outputs.version == steps.cur.outputs.current
-        run: echo "Cask already at version ${{ steps.cur.outputs.current }} — nothing to do."
