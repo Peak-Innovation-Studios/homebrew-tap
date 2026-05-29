@@ -1,6 +1,6 @@
 cask "gpg-manager" do
   version "1.0.0"
-  sha256 "4afa875844b847358a02a8a26d6679905948c246da99563b25a2286338f84cb6"
+  sha256 "5ac52163abbb5f3aaeebb1bae1f4156f6f1180cc7040b57ee01ce255cf527fea"
 
   url "https://github.com/Peak-Innovation-Studios/GPGManager/releases/download/v#{version}/GPGManager-#{version}.zip"
   name "GPG Manager"
