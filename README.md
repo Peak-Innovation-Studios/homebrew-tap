@@ -9,6 +9,12 @@ brew tap peak-innovation-studios/tap
 brew install --cask gpg-manager
 ```
 
+If your Homebrew installation requires explicit trust for third-party taps, run:
+
+```sh
+brew trust --tap peak-innovation-studios/tap
+```
+
 ## Available Casks
 
 | Cask          | Description                                                   |

@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           v="${{ steps.ver.outputs.version }}"
-          url="https://github.com/Peak-Innovation-Studios/GPGManager/releases/download/v${v}/GPGManager-${v}.zip"
+          url="https://github.com/Peak-Innovation-Studios/GPGManager/releases/download/v${v}/GPGManager-${v}.dmg"
           tmp=$(mktemp)
           curl -sfL "$url" -o "$tmp"
           sha=$(shasum -a 256 "$tmp" | cut -d' ' -f1)
