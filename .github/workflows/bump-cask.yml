@@ -19,16 +19,20 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Determine target version
         id: ver
+        env:
+          # Anonymous api.github.com calls share an IP rate limit across every
+          # tenant on the runner, so an hourly cron 403s intermittently.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -n "${{ github.event.inputs.version }}" ]; then
             v="${{ github.event.inputs.version }}"
           else
-            v=$(curl -sf https://api.github.com/repos/Peak-Innovation-Studios/GPGManager/releases/latest | jq -r .tag_name)
+            v=$(gh api repos/Peak-Innovation-Studios/GPGManager/releases/latest --jq .tag_name)
             v="${v#v}"
           fi
           if [ -z "$v" ] || [ "$v" = "null" ]; then
